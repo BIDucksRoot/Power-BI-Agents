@@ -1,0 +1,49 @@
+# .azuredevops/pipelines/ai-documentation.yml
+name: AI-Powered Model Documentation
+
+trigger:
+  branches:
+    include:
+      - main
+  paths:
+    include:
+      - 'Dataset.SemanticModel/**'
+
+schedules:
+- cron: "0 0 * * 0"  # Weekly on Sunday
+  displayName: Weekly AI Documentation
+  branches:
+    include:
+      - main
+
+pool:
+  vmImage: 'windows-latest'
+
+variables:
+  - group: powerbi-secrets  # Contains ANTHROPIC_API_KEY
+
+steps:
+- task: UsePythonVersion@0
+  inputs:
+    versionSpec: '3.11'
+
+- script: |
+    pip install anthropic gitpython mcp pyyaml
+  displayName: 'Install dependencies'
+
+- task: PythonScript@0
+  inputs:
+    scriptSource: 'filePath'
+    scriptPath: 'scripts/ai-powerbi-agent.py'
+  env:
+    ANTHROPIC_API_KEY: $(ANTHROPIC_API_KEY)
+  displayName: 'Run AI Documentation Agent'
+
+- script: |
+    git config user.email "ai-agent@azuredevops.com"
+    git config user.name "PowerBI AI Agent"
+    git add Dataset.SemanticModel/ backups/ docs/
+    git diff-index --quiet HEAD || git commit -m "🤖 AI-generated documentation and backup"
+    git push origin HEAD:$(Build.SourceBranchName)
+  displayName: 'Commit AI-generated docs'
+  condition: succeeded()
